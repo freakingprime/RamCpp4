@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="RamCpp4/RamCpp4.vcxproj" Id="4a5080e4-8b1e-4b07-95e0-07df730e7b31" />
+  <Project Path="RamCpp4_Widget/RamCpp4_Widget.vcxproj" Id="b128e619-3fea-417e-be17-8461862f0d9c" />
+</Solution>

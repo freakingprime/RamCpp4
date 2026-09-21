@@ -1,0 +1,74 @@
+# ==========================================================
+# RamCpp4 Configuration File (Windows 10 & 11 64-bit)
+# In-Process Taskbar System Monitor
+# ==========================================================
+
+# Metrics refresh and UI update interval in milliseconds (default: 2000, minimum: 900)
+UpdateInterval=2000
+
+# Text Color:
+# Set to 'Auto' to automatically match the Windows taskbar clock color (Light/Dark theme),
+# or specify a custom Hex RRGGBB (e.g. FFFFFF, 00E5FF, FFB300)
+TextColor=Auto
+
+# Font Settings (Uses native ClearType for crisp, smooth text matching native taskbar)
+FontFamily=Segoe UI
+FontSize=9
+FontBold=0
+
+# Text Alignment: Center, Left, Right
+Alignment=Center
+
+# Network Adapter Selection:
+# Auto = Sums traffic across all active physical network adapters (default)
+# Or specify Adapter Name / Description (e.g. "Ethernet", "Wi-Fi", "Realtek")
+# Or specify Local IP Address (e.g. "192.168.1.100")
+NetworkAdapter=Auto
+
+# Formatting Templates
+# Available tokens:
+#   {cpu}              - CPU usage % (0-99, 2-digit fixed width via space padding)
+#   {ram_percent}      - Used RAM % (2-digit fixed width via space padding)
+#   {ram_free_percent} - Free RAM % (2-digit fixed width via space padding)
+#   {ram_used_gb}      - Used RAM in GB (4-char fixed width, e.g. 7.8)
+#   {ram_free_gb}      - Free RAM in GB (4-char fixed width)
+#   {ram_total_gb}     - Total RAM in GB (e.g. 16.0)
+#   {net_down}         - Download speed in Mbps with 1 decimal (e.g. 4.8, 150.2)
+#   {net_up}           - Upload speed in Mbps with 1 decimal (e.g. 1.2, 42.5)
+#   {net_down_mb}      - Download speed in MB/s with 1 decimal (e.g. 15.6)
+#   {net_up_mb}        - Upload speed in MB/s with 1 decimal (e.g. 2.1)
+#   {net_down_int}     - Download speed in Mbps whole integer without decimal (e.g. 5, 150)
+#   {net_up_int}       - Upload speed in Mbps whole integer without decimal (e.g. 1, 42)
+#   {net_down_mb_int}  - Download speed in MB/s whole integer without decimal (e.g. 16)
+#   {net_up_mb_int}    - Upload speed in MB/s whole integer without decimal (e.g. 2)
+# (Aliases: {net_down_0}, {net_up_0}, {net_down_mb_0}, {net_up_mb_0})
+# Use \n for newline.
+# Literal Unicode symbols (↑, ↓, ▲, ▼) and escapes (\u2191, \u2193) are fully supported.
+#
+# Examples with Network:
+#   HorizontalTemplate=CPU: {cpu}%  ↓{net_down_mb_int}M\nRAM: {ram_percent}%  ↑{net_up_mb_int}M
+#
+HorizontalTemplate=CPU: {cpu}%\nRAM: {ram_percent}%
+VerticalTemplate=C:{cpu}%\nR:{ram_percent}%
+
+# Dimensions & Spacing (in pixels)
+HorizontalWidth=90
+VerticalHeight=40
+PaddingX=4
+PaddingY=2
+
+# Position Manual Offset (in pixels):
+# OffsetX: negative moves left, positive moves right
+# OffsetY: negative moves up, positive moves down
+OffsetX=0
+OffsetY=0
+
+# Number Padding (Alignment):
+# 1 = Pad numbers with leading spaces for fixed column alignment (e.g. " 7%", " 4.2G")
+# 0 = No space padding (e.g. "7%", "4.2G")
+EnablePadding=1
+
+# Debug Sizing Border:
+# 1 = Draw 1-pixel high-contrast border to visually assist size/padding adjustment
+# 0 = Completely invisible background (normal mode)
+ShowDebugBorder=0

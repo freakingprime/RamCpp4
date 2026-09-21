@@ -1,0 +1,24 @@
+# Visual Studio files
+.vs/
+*.obj
+*.pdb
+*.tlog
+*.lastbuildstate
+*.idb
+*.ilk
+*.iobj
+*.ipdb
+*.log
+*.VC.db
+*.VC.opendb
+
+# Build output directories
+x64/
+x86/
+bin/
+Debug/
+Release/
+
+# User-specific files
+*.vcxproj.user
+*.suo
