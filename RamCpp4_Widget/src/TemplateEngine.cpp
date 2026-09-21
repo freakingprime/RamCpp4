@@ -3,6 +3,40 @@
 #include <algorithm>
 #include <cmath>
 
+namespace {
+    struct TwoDigitTables {
+        wchar_t padded[100][3];
+        wchar_t unpadded[100][3];
+        size_t unpaddedLen[100];
+
+        TwoDigitTables() {
+            for (int i = 0; i < 100; ++i) {
+                if (i < 10) {
+                    padded[i][0] = L' ';
+                    padded[i][1] = static_cast<wchar_t>(L'0' + i);
+                    padded[i][2] = L'\0';
+
+                    unpadded[i][0] = static_cast<wchar_t>(L'0' + i);
+                    unpadded[i][1] = L'\0';
+                    unpadded[i][2] = L'\0';
+                    unpaddedLen[i] = 1;
+                } else {
+                    padded[i][0] = static_cast<wchar_t>(L'0' + (i / 10));
+                    padded[i][1] = static_cast<wchar_t>(L'0' + (i % 10));
+                    padded[i][2] = L'\0';
+
+                    unpadded[i][0] = static_cast<wchar_t>(L'0' + (i / 10));
+                    unpadded[i][1] = static_cast<wchar_t>(L'0' + (i % 10));
+                    unpadded[i][2] = L'\0';
+                    unpaddedLen[i] = 2;
+                }
+            }
+        }
+    };
+
+    const TwoDigitTables g_tables;
+}
+
 void CompiledTemplate::Compile(const std::wstring& templateStr) {
     m_chunks.clear();
     m_neededFlags = METRIC_FLAG_NONE;
@@ -103,34 +137,52 @@ void CompiledTemplate::Format(const SystemMetrics& metrics, wchar_t* outBuf, siz
             }
             case OP_CPU: {
                 int val = std::clamp(metrics.cpuPercent, 0, 99);
-                int written = enablePadding ? swprintf_s(numBuf, L"%2d", val)
-                                            : swprintf_s(numBuf, L"%d", val);
-                if (written > 0) {
-                    size_t toCopy = (std::min)((size_t)written, maxLen - 1 - curLen);
-                    wmemcpy(outBuf + curLen, numBuf, toCopy);
-                    curLen += toCopy;
+                if (enablePadding) {
+                    if (curLen + 2 < maxLen) {
+                        outBuf[curLen] = g_tables.padded[val][0];
+                        outBuf[curLen + 1] = g_tables.padded[val][1];
+                        curLen += 2;
+                    }
+                } else {
+                    size_t toCopy = g_tables.unpaddedLen[val];
+                    if (curLen + toCopy < maxLen) {
+                        wmemcpy(outBuf + curLen, g_tables.unpadded[val], toCopy);
+                        curLen += toCopy;
+                    }
                 }
                 break;
             }
             case OP_RAM_PERCENT: {
                 int val = std::clamp(metrics.ramPercent, 0, 99);
-                int written = enablePadding ? swprintf_s(numBuf, L"%2d", val)
-                                            : swprintf_s(numBuf, L"%d", val);
-                if (written > 0) {
-                    size_t toCopy = (std::min)((size_t)written, maxLen - 1 - curLen);
-                    wmemcpy(outBuf + curLen, numBuf, toCopy);
-                    curLen += toCopy;
+                if (enablePadding) {
+                    if (curLen + 2 < maxLen) {
+                        outBuf[curLen] = g_tables.padded[val][0];
+                        outBuf[curLen + 1] = g_tables.padded[val][1];
+                        curLen += 2;
+                    }
+                } else {
+                    size_t toCopy = g_tables.unpaddedLen[val];
+                    if (curLen + toCopy < maxLen) {
+                        wmemcpy(outBuf + curLen, g_tables.unpadded[val], toCopy);
+                        curLen += toCopy;
+                    }
                 }
                 break;
             }
             case OP_RAM_FREE_PERCENT: {
                 int val = std::clamp(metrics.ramFreePercent, 0, 99);
-                int written = enablePadding ? swprintf_s(numBuf, L"%2d", val)
-                                            : swprintf_s(numBuf, L"%d", val);
-                if (written > 0) {
-                    size_t toCopy = (std::min)((size_t)written, maxLen - 1 - curLen);
-                    wmemcpy(outBuf + curLen, numBuf, toCopy);
-                    curLen += toCopy;
+                if (enablePadding) {
+                    if (curLen + 2 < maxLen) {
+                        outBuf[curLen] = g_tables.padded[val][0];
+                        outBuf[curLen + 1] = g_tables.padded[val][1];
+                        curLen += 2;
+                    }
+                } else {
+                    size_t toCopy = g_tables.unpaddedLen[val];
+                    if (curLen + toCopy < maxLen) {
+                        wmemcpy(outBuf + curLen, g_tables.unpadded[val], toCopy);
+                        curLen += toCopy;
+                    }
                 }
                 break;
             }

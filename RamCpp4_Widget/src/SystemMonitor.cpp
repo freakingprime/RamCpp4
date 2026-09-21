@@ -62,6 +62,7 @@ void SystemMonitor::SetConfiguredAdapter(const std::wstring& adapterName, bool f
 }
 
 void SystemMonitor::RefreshNetworkAdapters() {
+    m_lastAdapterRefreshTick = GetTickCount64();
     PMIB_IF_TABLE2 pTable = nullptr;
     if (GetIfTable2(&pTable) != NO_ERROR || !pTable) return;
 
@@ -262,12 +263,14 @@ void SystemMonitor::Update(uint32_t neededFlags, SystemMetrics& outMetrics) {
     }
 
     if (neededFlags & METRIC_FLAG_NET) {
+        ULONGLONG curTick = GetTickCount64();
         if (m_cachedAdapters.empty()) {
-            RefreshNetworkAdapters();
-            m_prevNetTick = GetTickCount64();
+            if (m_lastAdapterRefreshTick == 0 || curTick >= m_lastAdapterRefreshTick + 20000) {
+                RefreshNetworkAdapters();
+                m_prevNetTick = curTick;
+            }
         }
 
-        ULONGLONG curTick = GetTickCount64();
         uint64_t totalIn = 0;
         uint64_t totalOut = 0;
         uint64_t prevIn = 0;
@@ -296,7 +299,9 @@ void SystemMonitor::Update(uint32_t neededFlags, SystemMetrics& outMetrics) {
         }
 
         if (!anyValid) {
-            RefreshNetworkAdapters();
+            if (curTick >= m_lastAdapterRefreshTick + 20000) {
+                RefreshNetworkAdapters();
+            }
         } else if (m_prevNetTick > 0 && curTick > m_prevNetTick) {
             double elapsedSec = (curTick - m_prevNetTick) / 1000.0;
             if (elapsedSec > 0.05) {

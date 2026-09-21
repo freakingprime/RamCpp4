@@ -57,6 +57,7 @@ private:
     std::wstring m_targetAdapter = L"Auto";
     std::vector<CachedAdapterStats> m_cachedAdapters;
     ULONGLONG m_prevNetTick = 0;
+    ULONGLONG m_lastAdapterRefreshTick = 0;
 
     void RefreshNetworkAdapters();
     static uint64_t FileTimeToUint64(const FILETIME& ft);

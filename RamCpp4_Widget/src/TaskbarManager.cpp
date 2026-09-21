@@ -60,7 +60,6 @@ LRESULT CALLBACK TaskbarManager::ShellTraySubclassProc(
     WidgetWindow* pWidget = reinterpret_cast<WidgetWindow*>(dwRefData);
 
     switch (uMsg) {
-        case WM_WINDOWPOSCHANGING:
         case WM_WINDOWPOSCHANGED:
         case WM_SIZE:
             if (pWidget) {
@@ -146,6 +145,10 @@ bool TaskbarManager::CalculateWidgetRect(const AppConfig& config, RECT& outRect,
 }
 
 COLORREF TaskbarManager::GetAutoTextColor() const {
+    if (m_textColorCached) {
+        return m_cachedTextColor;
+    }
+
     DWORD lightTheme = 0;
     DWORD size = sizeof(lightTheme);
     HKEY hKey = nullptr;
@@ -159,5 +162,7 @@ COLORREF TaskbarManager::GetAutoTextColor() const {
     }
 
     // 1 = Light taskbar (dark text #181818), 0 = Dark taskbar (white text #FFFFFF)
-    return (lightTheme == 1) ? RGB(24, 24, 24) : RGB(255, 255, 255);
+    m_cachedTextColor = (lightTheme == 1) ? RGB(24, 24, 24) : RGB(255, 255, 255);
+    m_textColorCached = true;
+    return m_cachedTextColor;
 }

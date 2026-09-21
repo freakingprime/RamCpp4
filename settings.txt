@@ -1,78 +1,155 @@
-# ==========================================================
+# ==============================================================================
 # RamCpp4 Configuration File (Windows 10 & 11 64-bit)
-# In-Process Taskbar System Monitor
-# ==========================================================
+# Real-Time In-Process Taskbar System Monitor
+# ==============================================================================
 
-# Metrics refresh and UI update interval in milliseconds (default: 2000)
+# ------------------------------------------------------------------------------
+# 1. TIMING & PERFORMANCE
+# ------------------------------------------------------------------------------
+# UpdateInterval: Polling and UI refresh interval in milliseconds.
+# Recommended: 1000 (1 second) or 2000 (2 seconds). Hard minimum is 900.
 UpdateInterval=1000
 
-# Text Color:
-# Set to 'Auto' to automatically match the Windows taskbar clock color,
-# or specify a custom Hex RRGGBB (e.g. FFFFFF, 00E5FF, FFB300)
+
+# ------------------------------------------------------------------------------
+# 2. COLOR SETTINGS
+# ------------------------------------------------------------------------------
+# TextColor:
+#   - Auto: Automatically matches the taskbar clock (white on dark theme,
+#           dark gray #181818 on light theme).
+#   - Custom Hex: RRGGBB or #RRGGBB (e.g. FFFFFF, 00E5FF, FFB300, 00FF66).
 TextColor=Auto
 
-# Font Settings:
-# FontFamily: Consolas, Segoe UI, Segoe UI Variable Text, etc.
+
+# ------------------------------------------------------------------------------
+# 3. TYPOGRAPHY & FONT SETTINGS
+# ------------------------------------------------------------------------------
+# FontFamily: Any installed font family.
+# Popular choices:
+#   - Consolas                 (Monospaced, clean column alignment)
+#   - Segoe UI                 (Native Windows 10 taskbar font)
+#   - Segoe UI Variable Text   (Native Windows 11 taskbar font)
+#   - Cascadia Code            (Modern monospaced programming font)
 FontFamily=Consolas
+
+# FontSize: Font size in points (integer from 6 to 36).
 FontSize=11
+
+# FontBold:
+#   0 = Normal weight
+#   1 = Bold weight (overrides FontWeight to 700)
 FontBold=0
+
+# FontWeight: Precise font stroke weight (100 to 900, or text keyword):
+#   - Thin       (100)
+#   - ExtraLight (200)
+#   - Light      (300)
+#   - SemiLight  (350) - Matches Windows 10 clock numerals
+#   - Normal     (400) - Regular weight
+#   - Medium     (500)
+#   - SemiBold   (600)
+#   - Bold       (700)
 FontWeight=Normal
+
+# TextThinning: Perceptual alpha thinning exponent (from 0.5 to 3.0).
+# Eliminates Desktop Window Manager (DWM) layered window edge swelling:
+#   1.0 = Standard GDI anti-aliasing (slightly heavier)
+#   1.4 = Slender (recommended for clock matching)
+#   1.8 = Ultra-thin, delicate strokes
 TextThinning=1.4
+
+# FontQuality: Font smoothing engine:
+#   - AntiAliased : Grayscale anti-aliasing (smooth, 0 color fringing, uses TextThinning)
+#   - ClearType   : Subpixel LCD rendering (RamCpp3 style, crisp 1-pixel stems)
 FontQuality=AntiAliased
 
-# Text Alignment: Center, Left, Right
+# Alignment: Text alignment within the widget box:
+#   - Center
+#   - Left
+#   - Right
 Alignment=Center
 
-# Network Adapter Selection:
-# Auto = Sums traffic across all active physical network adapters (default)
-# Or specify Adapter Name / Description (e.g. "Ethernet", "Wi-Fi", "Realtek")
-# Or specify Local IP Address (e.g. "192.168.1.100")
+
+# ------------------------------------------------------------------------------
+# 4. NETWORK ADAPTER SELECTION
+# ------------------------------------------------------------------------------
+# NetworkAdapter:
+#   - Auto        : Automatically sums traffic across all active physical adapters.
+#   - Name/Desc   : Case-insensitive adapter name or part of description
+#                   (e.g. "Wi-Fi", "Ethernet", "Realtek", "Intel").
+#   - IP Address  : Match by local IPv4 address (e.g. "192.168.1.100").
 NetworkAdapter=Wi-Fi
 
-# Formatting Templates
-# Available tokens:
-#   {cpu}              - CPU usage % (0-99, 2-digit fixed width via space padding)
-#   {ram_percent}      - Used RAM % (2-digit fixed width via space padding)
-#   {ram_free_percent} - Free RAM % (2-digit fixed width via space padding)
-#   {ram_used_gb}      - Used RAM in GB (4-char fixed width, e.g. 7.8)
-#   {ram_free_gb}      - Free RAM in GB (4-char fixed width)
-#   {ram_total_gb}     - Total RAM in GB (e.g. 16.0)
-#   {net_down}         - Download speed in Mbps with 1 decimal (e.g. 4.8, 150.2)
-#   {net_up}           - Upload speed in Mbps with 1 decimal (e.g. 1.2, 42.5)
-#   {net_down_mb}      - Download speed in MB/s with 1 decimal (e.g. 15.6)
-#   {net_up_mb}        - Upload speed in MB/s with 1 decimal (e.g. 2.1)
-#   {net_down_int}     - Download speed in Mbps whole integer without decimal (e.g. 5, 150)
-#   {net_up_int}       - Upload speed in Mbps whole integer without decimal (e.g. 1, 42)
-#   {net_down_mb_int}  - Download speed in MB/s whole integer without decimal (e.g. 16)
-#   {net_up_mb_int}    - Upload speed in MB/s whole integer without decimal (e.g. 2)
-# (Aliases: {net_down_0}, {net_up_0}, {net_down_mb_0}, {net_up_mb_0})
-# Use \n for newline.
-# Literal Unicode symbols (↑, ↓, ▲, ▼) and escapes (\u2191, \u2193) are fully supported.
-# Example with Network: CPU: {cpu}%  ↓{net_down_mb_int}M\nRAM: {ram_percent}%  ↑{net_up_mb_int}M
-# wide-headed Barb Arrow 🡠 🡢 🡡 🡣 🡤 🡥 🡦 🡧 • 🡨 🡪 🡩 🡫 🡬 🡭 🡮 🡯 • 🡰 🡲 🡱 🡳 🡴 🡵 🡶 🡷 • 🡸 🡺 🡹 🡻 🡼 🡽 🡾 🡿 • 🢀 🢂 🢁 🢃 🢄 🢅 🢆 🢇
-# black arrowhead ➤ • ⮜ ⮞ ⮝ ⮟ • black white arrowhead ➢ ➣ • ⮘ ⮚ ⮙ ⮛
-# diff size arrow head 🠀 🠂 🠁 🠃 • 🠄 🠆 🠅 🠇 • 🠈 🠊 🠉 🠋
+
+# ------------------------------------------------------------------------------
+# 5. TEMPLATES & AVAILABLE TOKENS
+# ------------------------------------------------------------------------------
+# Use \n to insert a newline.
+#
+# Available Tokens:
+#   CPU:
+#     {cpu}              - CPU usage % (0-99, fixed 2-digit with space padding)
+#
+#   RAM:
+#     {ram_percent}      - Used RAM % (0-99, fixed 2-digit)
+#     {ram_free_percent} - Free RAM % (0-99, fixed 2-digit)
+#     {ram_used_gb}      - Used RAM in GB (4 chars, e.g.  7.8)
+#     {ram_free_gb}      - Free RAM in GB (4 chars, e.g.  9.5)
+#     {ram_total_gb}     - Total physical RAM in GB (e.g. 16.0)
+#
+#   NETWORK (Mbps - Megabits per second):
+#     {net_down}         - Download speed with 1 decimal (e.g.  15.2)
+#     {net_up}           - Upload speed with 1 decimal (e.g.   2.1)
+#     {net_down_int}     - Download whole integer (e.g. 15) [aliases: {net_down_0}, {net_down_round}]
+#     {net_up_int}       - Upload whole integer (e.g. 2)    [aliases: {net_up_0}, {net_up_round}]
+#
+#   NETWORK (MB/s - Megabytes per second):
+#     {net_down_mb}      - Download in MB/s with 1 decimal (e.g. 1.9)
+#     {net_up_mb}        - Upload in MB/s with 1 decimal (e.g. 0.3)
+#     {net_down_mb_int}  - Download whole integer in MB/s   [aliases: {net_down_mb_0}]
+#     {net_up_mb_int}    - Upload whole integer in MB/s     [aliases: {net_up_mb_0}]
+#
+# Unicode Arrows Reference (copy-paste directly or use escapes):
+#   - Standard: ↑, ↓, ▲, ▼, \u2191, \u2193
+#   - Barb Arrows: 🡠 🡢 🡡 🡣 • 🡨 🡪 🡩 🡫 • 🡰 🡲 🡱 🡳 • 🡸 🡺 🡹 🡻 • 🢀 🢂 🢁 🢃
+#   - Black Arrowheads: ➤ • ⮜ ⮞ ⮝ ⮟ • ➢ ➣ • ⮘ ⮚ ⮙ ⮛
+#   - Heavy Triangles: 🠀 🠂 🠁 🠃 • 🠄 🠆 🠅 🠇 • 🠈 🠊 🠉 🠋
+#
+# Active Templates:
 HorizontalTemplate=Free: {ram_free_gb} GB ({ram_free_percent}%) 🠉{net_up_int}\nCPU : {cpu}   %        🠋{net_down_int}
 VerticalTemplate=C:{cpu}%\nFree:\n{ram_free_gb} GB\n({ram_free_percent}%)\n🠉{net_up_int}\n🠋{net_down_int}
 
-# Dimensions & Spacing (in pixels)
+
+# ------------------------------------------------------------------------------
+# 6. DIMENSIONS, PADDING & POSITIONING
+# ------------------------------------------------------------------------------
+# HorizontalWidth: Width in pixels when taskbar is horizontal (30 to 400).
 HorizontalWidth=220
+
+# VerticalHeight: Height in pixels when taskbar is vertical (20 to 300).
+# Recommended: 40 for 2 lines, 120 for 6 lines.
 VerticalHeight=120
+
+# Inner text padding in pixels:
 PaddingX=1
 PaddingY=1
 
-# Position Manual Offset (in pixels):
-# OffsetX: negative moves left, positive moves right
-# OffsetY: negative moves up, positive moves down
+# Manual Position Offsets in pixels (useful for fine-tuning dock placement):
+#   OffsetX: negative moves left, positive moves right
+#   OffsetY: negative moves up, positive moves down
 OffsetX=0
 OffsetY=0
 
-# Number Padding (Alignment):
-# 1 = Pad numbers with leading spaces for fixed column alignment (e.g. " 7%", " 4.2G")
-# 0 = No space padding (e.g. "7%", "4.2G")
+# EnablePadding:
+#   1 = Pads single-digit numbers with leading spaces for fixed column alignment (e.g. " 7%")
+#   0 = No padding (e.g. "7%")
 EnablePadding=1
 
-# Debug Sizing Border:
-# 1 = Draw 1-pixel high-contrast border to visually assist size/padding adjustment
-# 0 = Completely invisible background (normal mode)
+
+# ------------------------------------------------------------------------------
+# 7. DIAGNOSTICS & DEBUG
+# ------------------------------------------------------------------------------
+# ShowDebugBorder:
+#   1 = Draws a 1-pixel high-contrast border around the widget box to assist sizing/placement.
+#   0 = Normal mode (100% invisible transparent background).
 ShowDebugBorder=0
