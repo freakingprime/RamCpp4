@@ -4,8 +4,7 @@
 #endif
 #include <windows.h>
 #include <string>
-#include <thread>
-#include <atomic>
+#include <mutex>
 #include "Config.h"
 #include "TaskbarManager.h"
 #include "SystemMonitor.h"
@@ -42,17 +41,18 @@ private:
     TaskbarManager m_taskbarManager;
 
     HFONT m_hFont = nullptr;
-    COLORREF m_currentTextColor = RGB(255, 255, 255);
     wchar_t m_currentText[512] = { 0 };
+    std::mutex m_textMutex;
     bool m_isHorizontal = true;
 
-    // Background worker thread for hardware monitoring
-    std::jthread m_workerThread;
-    std::atomic<bool> m_workerRunning = false;
-    void WorkerLoop(std::stop_token stopToken);
+    // Background worker thread for hardware monitoring (isolated from loader lock)
+    HANDLE m_hWorkerThread = nullptr;
+    HANDLE m_hStopEvent = nullptr;
+    static DWORD WINAPI WorkerThreadThunk(LPVOID lpParam);
+    void WorkerLoop();
 
     void RecreateFont();
-    void Render(HDC hdc);
+    void RedrawLayered();
     void ShowContextMenu();
     void UnloadAndExit();
 

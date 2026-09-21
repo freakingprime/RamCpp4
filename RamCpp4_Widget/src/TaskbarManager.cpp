@@ -85,16 +85,12 @@ bool TaskbarManager::CalculateWidgetRect(const AppConfig& config, RECT& outRect,
     RECT rcTrayScreen = { 0 };
     if (!GetWindowRect(m_hTrayNotifyWnd, &rcTrayScreen)) return false;
 
-    RECT rcShellClient = { 0 };
-    if (!GetClientRect(m_hShellTrayWnd, &rcShellClient)) return false;
+    RECT rcShell = { 0 };
+    if (!GetWindowRect(m_hShellTrayWnd, &rcShell)) return false;
 
-    int shellWidth = rcShellClient.right - rcShellClient.left;
-    int shellHeight = rcShellClient.bottom - rcShellClient.top;
+    int shellWidth = rcShell.right - rcShell.left;
+    int shellHeight = rcShell.bottom - rcShell.top;
     if (shellWidth <= 0 || shellHeight <= 0) return false;
-
-    // Convert TrayNotifyWnd top-left to Shell_TrayWnd client coordinates
-    POINT ptTrayClient = { rcTrayScreen.left, rcTrayScreen.top };
-    ScreenToClient(m_hShellTrayWnd, &ptTrayClient);
 
     // Dimension-based orientation: width > height is horizontal, height > width is vertical
     outIsHorizontal = (shellWidth > shellHeight);
@@ -106,27 +102,45 @@ bool TaskbarManager::CalculateWidgetRect(const AppConfig& config, RECT& outRect,
         h = config.verticalHeight;
         if (h > shellHeight || h <= 0) h = shellHeight;
 
-        x = ptTrayClient.x - w + config.offsetX;
-        y = (shellHeight - h) / 2 + config.offsetY;
+        x = rcTrayScreen.left - w + config.offsetX;
+        y = rcShell.top + (shellHeight - h) / 2 + config.offsetY;
     } else {
         w = shellWidth;
         h = config.verticalHeight;
         if (h <= 0) h = 40;
 
-        x = (shellWidth - w) / 2 + config.offsetX;
-        y = ptTrayClient.y - h + config.offsetY;
+        x = rcShell.left + (shellWidth - w) / 2 + config.offsetX;
+        y = rcTrayScreen.top - h + config.offsetY;
     }
-
-    // Clamp within Shell_TrayWnd client area
-    if (x < 0) x = 0;
-    if (y < 0) y = 0;
-    if (x + w > shellWidth) x = shellWidth - w;
-    if (y + h > shellHeight) y = shellHeight - h;
 
     outRect.left = x;
     outRect.top = y;
     outRect.right = x + w;
     outRect.bottom = y + h;
+
+    // Clamp within monitor bounds
+    HMONITOR hMon = MonitorFromWindow(m_hShellTrayWnd, MONITOR_DEFAULTTOPRIMARY);
+    if (hMon) {
+        MONITORINFO mi = { sizeof(mi) };
+        if (GetMonitorInfoW(hMon, &mi)) {
+            if (outRect.right > mi.rcMonitor.right) {
+                outRect.left = mi.rcMonitor.right - w;
+                outRect.right = mi.rcMonitor.right;
+            }
+            if (outRect.left < mi.rcMonitor.left) {
+                outRect.left = mi.rcMonitor.left;
+                outRect.right = mi.rcMonitor.left + w;
+            }
+            if (outRect.bottom > mi.rcMonitor.bottom) {
+                outRect.top = mi.rcMonitor.bottom - h;
+                outRect.bottom = mi.rcMonitor.bottom;
+            }
+            if (outRect.top < mi.rcMonitor.top) {
+                outRect.top = mi.rcMonitor.top;
+                outRect.bottom = mi.rcMonitor.top + h;
+            }
+        }
+    }
 
     return true;
 }

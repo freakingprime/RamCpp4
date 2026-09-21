@@ -1,7 +1,6 @@
 #include "WidgetWindow.h"
 #include <shellapi.h>
 #include <algorithm>
-#include <chrono>
 
 #define IDM_RELOAD        1001
 #define IDM_EDIT_SETTINGS 1002
@@ -25,9 +24,17 @@ WidgetWindow::~WidgetWindow() {
 }
 
 void WidgetWindow::Destroy() {
-    m_workerRunning = false;
-    if (m_workerThread.joinable()) {
-        m_workerThread.request_stop();
+    if (m_hStopEvent) {
+        SetEvent(m_hStopEvent);
+    }
+    if (m_hWorkerThread) {
+        WaitForSingleObject(m_hWorkerThread, 500);
+        CloseHandle(m_hWorkerThread);
+        m_hWorkerThread = nullptr;
+    }
+    if (m_hStopEvent) {
+        CloseHandle(m_hStopEvent);
+        m_hStopEvent = nullptr;
     }
 
     m_taskbarManager.Uninitialize();
@@ -73,14 +80,23 @@ bool WidgetWindow::Create(HINSTANCE hInstance, const std::wstring& configPath) {
     int h = rcWidget.bottom - rcWidget.top;
     HWND hShellTray = m_taskbarManager.GetShellTrayWnd();
 
-    // In-process child window of Shell_TrayWnd
+    // Initial metric sample for instant frame-1 rendering
+    {
+        std::lock_guard<std::mutex> lock(m_textMutex);
+        SystemMetrics initialMetrics;
+        const auto& activeTpl = m_isHorizontal ? m_horizontalTemplate : m_verticalTemplate;
+        m_monitor.Update(activeTpl.GetNeededMetricFlags(), initialMetrics);
+        activeTpl.Format(initialMetrics, m_currentText, 512, m_config.enablePadding);
+    }
+
+    // In-process popup window owned by Shell_TrayWnd to guarantee topmost position over taskbar buttons
     m_hWnd = CreateWindowExW(
-        0,
+        WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED,
         L"RamCpp4_TaskbarWidget",
-        L"RamCpp4_Widget",
-        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+        L"RamCpp4",
+        WS_POPUP | WS_VISIBLE,
         rcWidget.left, rcWidget.top, w, h,
-        hShellTray,
+        hShellTray ? hShellTray : NULL,
         NULL,
         hInstance,
         this
@@ -90,12 +106,11 @@ bool WidgetWindow::Create(HINSTANCE hInstance, const std::wstring& configPath) {
 
     m_taskbarManager.Initialize(this);
     RecreateFont();
+    RedrawLayered();
 
     // Start background hardware polling thread
-    m_workerRunning = true;
-    m_workerThread = std::jthread([this](std::stop_token st) {
-        WorkerLoop(st);
-    });
+    m_hStopEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+    m_hWorkerThread = CreateThread(NULL, 0, WorkerThreadThunk, this, 0, NULL);
 
     return true;
 }
@@ -120,7 +135,7 @@ void WidgetWindow::RecreateFont() {
         DEFAULT_CHARSET,
         OUT_DEFAULT_PRECIS,
         CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY,
+        ANTIALIASED_QUALITY,
         DEFAULT_PITCH | FF_DONTCARE,
         m_config.fontFamily.c_str()
     );
@@ -134,8 +149,6 @@ void WidgetWindow::ReloadConfig() {
 
     RecreateFont();
     OnTaskbarReposition();
-
-    // Trigger immediate update
     OnMetricsUpdated();
 }
 
@@ -146,27 +159,45 @@ void WidgetWindow::OnTaskbarReposition() {
     if (m_taskbarManager.CalculateWidgetRect(m_config, rcWidget, m_isHorizontal)) {
         int w = rcWidget.right - rcWidget.left;
         int h = rcWidget.bottom - rcWidget.top;
+
+        HWND hShellTray = m_taskbarManager.GetShellTrayWnd();
+        if (hShellTray && !IsWindowVisible(hShellTray)) {
+            ShowWindow(m_hWnd, SW_HIDE);
+            return;
+        }
+
         SetWindowPos(
-            m_hWnd, NULL,
+            m_hWnd, HWND_TOPMOST,
             rcWidget.left, rcWidget.top, w, h,
-            SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW
+            SWP_NOACTIVATE | SWP_SHOWWINDOW
         );
-        InvalidateRect(m_hWnd, NULL, FALSE);
+        RedrawLayered();
     }
 }
 
 void WidgetWindow::OnThemeChanged() {
     if (!m_hWnd || !IsWindow(m_hWnd)) return;
-    InvalidateRect(m_hWnd, NULL, FALSE);
+    RedrawLayered();
 }
 
 void WidgetWindow::OnMetricsUpdated() {
     if (!m_hWnd || !IsWindow(m_hWnd)) return;
-    InvalidateRect(m_hWnd, NULL, FALSE);
+    RedrawLayered();
 }
 
-void WidgetWindow::WorkerLoop(std::stop_token stopToken) {
-    while (!stopToken.stop_requested() && m_workerRunning) {
+DWORD WINAPI WidgetWindow::WorkerThreadThunk(LPVOID lpParam) {
+    WidgetWindow* pThis = reinterpret_cast<WidgetWindow*>(lpParam);
+    if (pThis) {
+        __try {
+            pThis->WorkerLoop();
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+        }
+    }
+    return 0;
+}
+
+void WidgetWindow::WorkerLoop() {
+    while (WaitForSingleObject(m_hStopEvent, 0) == WAIT_TIMEOUT) {
         const auto& activeTpl = m_isHorizontal ? m_horizontalTemplate : m_verticalTemplate;
         uint32_t neededFlags = activeTpl.GetNeededMetricFlags();
 
@@ -176,25 +207,28 @@ void WidgetWindow::WorkerLoop(std::stop_token stopToken) {
         wchar_t formatted[512] = { 0 };
         activeTpl.Format(metrics, formatted, 512, m_config.enablePadding);
 
-        if (wcscmp(m_currentText, formatted) != 0) {
-            wcscpy_s(m_currentText, formatted);
-            if (m_hWnd && IsWindow(m_hWnd)) {
-                PostMessageW(m_hWnd, WM_USER_METRICS_UPDATED, 0, 0);
+        bool changed = false;
+        {
+            std::lock_guard<std::mutex> lock(m_textMutex);
+            if (wcscmp(m_currentText, formatted) != 0) {
+                wcscpy_s(m_currentText, formatted);
+                changed = true;
             }
         }
 
-        // Sleep interruptibly up to updateInterval ms in 100ms slices
-        int remainingMs = (std::max)(m_config.updateInterval, 900);
-        while (remainingMs > 0 && !stopToken.stop_requested() && m_workerRunning) {
-            int sleepTime = (std::min)(remainingMs, 100);
-            std::this_thread::sleep_for(std::chrono::milliseconds(sleepTime));
-            remainingMs -= sleepTime;
+        if (changed && m_hWnd && IsWindow(m_hWnd)) {
+            PostMessageW(m_hWnd, WM_USER_METRICS_UPDATED, 0, 0);
+        }
+
+        int interval = (std::max)(m_config.updateInterval, 900);
+        if (WaitForSingleObject(m_hStopEvent, interval) != WAIT_TIMEOUT) {
+            break;
         }
     }
 }
 
-void WidgetWindow::Render(HDC hdc) {
-    if (!m_hWnd) return;
+void WidgetWindow::RedrawLayered() {
+    if (!m_hWnd || !IsWindow(m_hWnd)) return;
 
     RECT rcClient;
     GetClientRect(m_hWnd, &rcClient);
@@ -202,68 +236,112 @@ void WidgetWindow::Render(HDC hdc) {
     int h = rcClient.bottom - rcClient.top;
     if (w <= 0 || h <= 0) return;
 
-    // Double-buffered GDI memory DC
-    HDC memDC = CreateCompatibleDC(hdc);
-    HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
-    HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
+    HDC hdcScreen = GetDC(NULL);
+    HDC memDC = CreateCompatibleDC(hdcScreen);
 
-    // 1. Snapshot taskbar background beneath widget coordinates
-    POINT pt = { 0, 0 };
-    MapWindowPoints(m_hWnd, GetParent(m_hWnd), &pt, 1);
+    BITMAPINFO bmi = { 0 };
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = w;
+    bmi.bmiHeader.biHeight = -h; // Top-down DIB
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
 
-    HDC parentDC = GetDC(GetParent(m_hWnd));
-    if (parentDC) {
-        BitBlt(memDC, 0, 0, w, h, parentDC, pt.x, pt.y, SRCCOPY);
-        ReleaseDC(GetParent(m_hWnd), parentDC);
-    } else {
-        COLORREF bgCol = (m_taskbarManager.GetAutoTextColor() == RGB(255, 255, 255))
-            ? RGB(31, 31, 31) : RGB(243, 243, 243);
-        HBRUSH hBr = CreateSolidBrush(bgCol);
-        FillRect(memDC, &rcClient, hBr);
-        DeleteObject(hBr);
-    }
+    void* pBits = nullptr;
+    HBITMAP hBmp = CreateDIBSection(hdcScreen, &bmi, DIB_RGB_COLORS, &pBits, NULL, 0);
+    HGDIOBJ oldBmp = SelectObject(memDC, hBmp);
 
-    // 2. Set transparent background mode for ClearType text
-    SetBkMode(memDC, TRANSPARENT);
-    COLORREF textColor = m_config.isTextColorAuto
-        ? m_taskbarManager.GetAutoTextColor()
-        : m_config.customTextColor;
-    SetTextColor(memDC, textColor);
+    uint32_t* pPixels = reinterpret_cast<uint32_t*>(pBits);
+    const size_t totalPixels = (size_t)w * h;
+
+    // Initialize entire surface to black / 0 alpha
+    ZeroMemory(pPixels, totalPixels * sizeof(uint32_t));
+
+    // Draw text in pure white so luminance directly reflects the anti-aliased font coverage
     HGDIOBJ oldFont = SelectObject(memDC, m_hFont);
+    SetBkMode(memDC, TRANSPARENT);
+    SetTextColor(memDC, RGB(255, 255, 255));
 
-    // 3. Vertical centering inside padding
     RECT rcText = rcClient;
     rcText.left += m_config.paddingX;
     rcText.right -= m_config.paddingX;
     rcText.top += m_config.paddingY;
     rcText.bottom -= m_config.paddingY;
 
+    wchar_t textToDraw[512] = { 0 };
+    {
+        std::lock_guard<std::mutex> lock(m_textMutex);
+        wcscpy_s(textToDraw, m_currentText);
+    }
+
+    // Vertical centering
     RECT rcCalc = rcText;
-    DrawTextW(memDC, m_currentText, -1, &rcCalc, m_config.alignment | DT_WORDBREAK | DT_CALCRECT);
+    DrawTextW(memDC, textToDraw, -1, &rcCalc, m_config.alignment | DT_CALCRECT | DT_NOPREFIX);
     int textH = rcCalc.bottom - rcCalc.top;
-    int availH = rcText.bottom - rcText.top;
-    if (availH > textH) {
-        rcText.top += (availH - textH) / 2;
+    int boxH = rcText.bottom - rcText.top;
+    if (boxH > textH) {
+        rcText.top += (boxH - textH) / 2;
         rcText.bottom = rcText.top + textH;
     }
 
-    // 4. Draw smooth ClearType text
-    DrawTextW(memDC, m_currentText, -1, &rcText, m_config.alignment | DT_WORDBREAK);
+    DrawTextW(memDC, textToDraw, -1, &rcText, m_config.alignment | DT_NOPREFIX);
 
-    // 5. Optional debug border
-    if (m_config.showDebugBorder) {
-        HBRUSH hBorder = CreateSolidBrush(m_config.debugBorderColor);
-        FrameRect(memDC, &rcClient, hBorder);
-        DeleteObject(hBorder);
+    // Resolve target text color
+    COLORREF textColor = m_config.isTextColorAuto
+        ? m_taskbarManager.GetAutoTextColor()
+        : m_config.customTextColor;
+    BYTE targetR = GetRValue(textColor);
+    BYTE targetG = GetGValue(textColor);
+    BYTE targetB = GetBValue(textColor);
+
+    // Alpha reconstruction with true premultiplied alpha (smooth, zero color-fringing)
+    for (size_t i = 0; i < totalPixels; ++i) {
+        BYTE a = static_cast<BYTE>(pPixels[i] & 0xFF);
+        if (a > 0) {
+            BYTE pr = static_cast<BYTE>((targetR * a + 127) / 255);
+            BYTE pg = static_cast<BYTE>((targetG * a + 127) / 255);
+            BYTE pb = static_cast<BYTE>((targetB * a + 127) / 255);
+            pPixels[i] = (static_cast<uint32_t>(a) << 24) |
+                         (static_cast<uint32_t>(pr) << 16) |
+                         (static_cast<uint32_t>(pg) << 8) |
+                         pb;
+        } else {
+            // Alpha = 1: 100% invisible to human eye, but ensures full window captures mouse clicks
+            pPixels[i] = 0x01000000;
+        }
     }
 
-    // 6. Blit completed buffer onto screen
-    BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
+    // High-contrast debug border if requested
+    if (m_config.showDebugBorder) {
+        BYTE bR = GetRValue(m_config.debugBorderColor);
+        BYTE bG = GetGValue(m_config.debugBorderColor);
+        BYTE bB = GetBValue(m_config.debugBorderColor);
+        uint32_t borderPixel = 0xFF000000 | (static_cast<uint32_t>(bR) << 16) | (static_cast<uint32_t>(bG) << 8) | bB;
+
+        for (int x = 0; x < w; ++x) {
+            pPixels[x] = borderPixel;
+            pPixels[(h - 1) * w + x] = borderPixel;
+        }
+        for (int y = 0; y < h; ++y) {
+            pPixels[y * w] = borderPixel;
+            pPixels[y * w + (w - 1)] = borderPixel;
+        }
+    }
+
+    RECT rcWindow;
+    GetWindowRect(m_hWnd, &rcWindow);
+    POINT ptDst = { rcWindow.left, rcWindow.top };
+    POINT ptSrc = { 0, 0 };
+    SIZE size = { w, h };
+    BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+
+    UpdateLayeredWindow(m_hWnd, hdcScreen, &ptDst, &size, memDC, &ptSrc, 0, &blend, ULW_ALPHA);
 
     SelectObject(memDC, oldFont);
     SelectObject(memDC, oldBmp);
-    DeleteObject(memBmp);
+    DeleteObject(hBmp);
     DeleteDC(memDC);
+    ReleaseDC(NULL, hdcScreen);
 }
 
 void WidgetWindow::ShowContextMenu() {
@@ -320,20 +398,8 @@ LRESULT CALLBACK WidgetWindow::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 
 LRESULT WidgetWindow::HandleMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hWnd, &ps);
-            Render(hdc);
-            EndPaint(hWnd, &ps);
-            return 0;
-        }
-
-        case WM_ERASEBKGND:
-            // Prevent flicker by returning 1
-            return 1;
-
         case WM_USER_METRICS_UPDATED:
-            InvalidateRect(hWnd, NULL, FALSE);
+            RedrawLayered();
             return 0;
 
         case WM_USER_REPOSITION:

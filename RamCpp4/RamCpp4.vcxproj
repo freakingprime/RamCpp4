@@ -89,6 +89,16 @@
     <ClCompile Include="src\Injector.cpp" />
     <ClCompile Include="src\Main.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RamCpp4_Widget\RamCpp4_Widget.vcxproj">
+      <Project>{b128e619-3fea-417e-be17-8461862f0d9c}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemDefinitionGroup>
+    <PostBuildEvent>
+      <Command>if not exist "$(TargetDir)settings.txt" copy /Y "$(SolutionDir)settings.txt" "$(TargetDir)settings.txt"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

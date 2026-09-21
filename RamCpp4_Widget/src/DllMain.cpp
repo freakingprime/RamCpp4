@@ -33,6 +33,16 @@ namespace {
 extern "C" __declspec(dllexport) LRESULT CALLBACK RamCpp4_HookProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (!g_bInitialized && IsExplorerProcess()) {
         g_bInitialized = true;
+
+        // Increment module reference count so UnhookWindowsHookEx in the loader does not
+        // cause the DLL to unload, while still allowing clean ejection via FreeLibraryAndExitThread.
+        HMODULE hSelf = NULL;
+        GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+            reinterpret_cast<LPCWSTR>(RamCpp4_HookProc),
+            &hSelf
+        );
+
         std::wstring configPath = GetConfigPath();
 
         if (!g_pWidget) {
@@ -56,10 +66,8 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID /*lpvReserved*/)
             break;
 
         case DLL_PROCESS_DETACH:
-            if (g_pWidget) {
-                delete g_pWidget;
-                g_pWidget = nullptr;
-            }
+            // Safe teardown is performed via UnloadAndExit on the UI thread.
+            // Avoid joining threads or executing blocking code inside DllMain.
             break;
     }
     return TRUE;

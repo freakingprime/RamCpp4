@@ -5,26 +5,37 @@
 
 namespace Injector {
 
+HWND FindWidgetWindow() {
+    HWND hWnd = FindWindowW(L"RamCpp4_TaskbarWidget", NULL);
+    if (!hWnd) {
+        HWND hTray = FindWindowW(L"Shell_TrayWnd", NULL);
+        if (hTray) {
+            hWnd = FindWindowExW(hTray, NULL, L"RamCpp4_TaskbarWidget", NULL);
+        }
+    }
+    return hWnd;
+}
+
 bool IsWidgetRunning() {
-    return (FindWindowW(L"RamCpp4_TaskbarWidget", NULL) != NULL);
+    return (FindWidgetWindow() != NULL);
 }
 
 void SignalExit() {
-    HWND hWidget = FindWindowW(L"RamCpp4_TaskbarWidget", NULL);
+    HWND hWidget = FindWidgetWindow();
     if (hWidget) {
         PostMessageW(hWidget, WM_COMMAND, MAKEWPARAM(IDM_EXIT, 0), 0);
     }
 }
 
 void SignalReload() {
-    HWND hWidget = FindWindowW(L"RamCpp4_TaskbarWidget", NULL);
+    HWND hWidget = FindWidgetWindow();
     if (hWidget) {
         PostMessageW(hWidget, WM_COMMAND, MAKEWPARAM(IDM_RELOAD, 0), 0);
     }
 }
 
 bool Inject(const std::wstring& dllPath) {
-    // If widget is already running, no need to inject again
+    // If widget is already running, signal reload and return
     if (IsWidgetRunning()) {
         SignalReload();
         return true;
