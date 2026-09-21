@@ -23,11 +23,11 @@ echo Using MSBuild: %MSBUILD%
 if errorlevel 1 goto :build_failed
 
 echo.
-echo [SUCCESS] RamCpp4 built successfully.
+echo [SUCCESS] RamCpp4 built successfully with static runtime (/MT).
 echo Output directory: %~dp0x64\Release\
-echo   - RamCpp4.exe
-echo   - RamCpp4_Widget.dll
-echo   - settings.txt
+echo.
+echo Portable distribution ready at: %~dp0ReleaseFiles\
+dir /b "%~dp0ReleaseFiles\"
 goto :eof
 
 :build_failed

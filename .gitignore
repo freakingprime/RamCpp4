@@ -18,7 +18,9 @@ x86/
 bin/
 Debug/
 Release/
+ReleaseFiles/
 
 # User-specific files
 *.vcxproj.user
 *.suo
+*.png

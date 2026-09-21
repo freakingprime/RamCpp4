@@ -75,12 +75,20 @@
       <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;shell32.lib;advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>if not exist "$(TargetDir)settings.txt" copy /Y "$(SolutionDir)settings.txt" "$(TargetDir)settings.txt"
+if not exist "$(SolutionDir)ReleaseFiles" mkdir "$(SolutionDir)ReleaseFiles"
+copy /Y "$(TargetDir)RamCpp4.exe" "$(SolutionDir)ReleaseFiles\RamCpp4.exe"
+copy /Y "$(TargetDir)RamCpp4_Widget.dll" "$(SolutionDir)ReleaseFiles\RamCpp4_Widget.dll"
+copy /Y "$(SolutionDir)settings.txt" "$(SolutionDir)ReleaseFiles\settings.txt"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="src\Injector.h" />
@@ -94,11 +102,14 @@
       <Project>{b128e619-3fea-417e-be17-8461862f0d9c}</Project>
     </ProjectReference>
   </ItemGroup>
-  <ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <PostBuildEvent>
       <Command>if not exist "$(TargetDir)settings.txt" copy /Y "$(SolutionDir)settings.txt" "$(TargetDir)settings.txt"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
+  <Target Name="CleanReleaseFiles" BeforeTargets="Clean" Condition="'$(Configuration)'=='Release'">
+    <RemoveDir Directories="$(SolutionDir)ReleaseFiles" />
+  </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
