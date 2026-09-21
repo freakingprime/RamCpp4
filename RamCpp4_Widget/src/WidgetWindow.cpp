@@ -1,6 +1,7 @@
 #include "WidgetWindow.h"
 #include <shellapi.h>
 #include <algorithm>
+#include <cmath>
 
 #define IDM_RELOAD        1001
 #define IDM_EDIT_SETTINGS 1002
@@ -127,15 +128,22 @@ void WidgetWindow::RecreateFont() {
 
     int fontHeight = -MulDiv(m_config.fontSize, dpi, 72);
 
+    DWORD quality = (_wcsicmp(m_config.fontQuality.c_str(), L"ClearType") == 0)
+        ? CLEARTYPE_QUALITY
+        : ANTIALIASED_QUALITY;
+
+    int weight = m_config.fontWeight;
+    if (weight <= 0) weight = m_config.fontBold ? FW_BOLD : FW_NORMAL;
+
     m_hFont = CreateFontW(
         fontHeight,
         0, 0, 0,
-        m_config.fontBold ? FW_BOLD : FW_NORMAL,
+        weight,
         FALSE, FALSE, FALSE,
         DEFAULT_CHARSET,
         OUT_DEFAULT_PRECIS,
         CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY,
+        quality,
         DEFAULT_PITCH | FF_DONTCARE,
         m_config.fontFamily.c_str()
     );
@@ -254,13 +262,30 @@ void WidgetWindow::RedrawLayered() {
     uint32_t* pPixels = reinterpret_cast<uint32_t*>(pBits);
     const size_t totalPixels = (size_t)w * h;
 
-    // Initialize entire surface to black / 0 alpha
-    ZeroMemory(pPixels, totalPixels * sizeof(uint32_t));
+    bool isClearType = (_wcsicmp(m_config.fontQuality.c_str(), L"ClearType") == 0);
 
-    // Draw text in pure white so luminance directly reflects the anti-aliased font coverage
+    // Resolve target text color
+    COLORREF textColor = m_config.isTextColorAuto
+        ? m_taskbarManager.GetAutoTextColor()
+        : m_config.customTextColor;
+    BYTE targetR = GetRValue(textColor);
+    BYTE targetG = GetGValue(textColor);
+    BYTE targetB = GetBValue(textColor);
+
+    if (isClearType) {
+        // ClearType mode (as in RamCpp3): draw directly with target color on transparent baseline
+        for (size_t i = 0; i < totalPixels; ++i) {
+            pPixels[i] = 0x01000000;
+        }
+        SetTextColor(memDC, textColor);
+    } else {
+        // AntiAliased mode: initialize to zero and draw in pure white for exact coverage extraction
+        ZeroMemory(pPixels, totalPixels * sizeof(uint32_t));
+        SetTextColor(memDC, RGB(255, 255, 255));
+    }
+
     HGDIOBJ oldFont = SelectObject(memDC, m_hFont);
     SetBkMode(memDC, TRANSPARENT);
-    SetTextColor(memDC, RGB(255, 255, 255));
 
     RECT rcText = rcClient;
     rcText.left += m_config.paddingX;
@@ -286,28 +311,45 @@ void WidgetWindow::RedrawLayered() {
 
     DrawTextW(memDC, textToDraw, -1, &rcText, m_config.alignment | DT_NOPREFIX);
 
-    // Resolve target text color
-    COLORREF textColor = m_config.isTextColorAuto
-        ? m_taskbarManager.GetAutoTextColor()
-        : m_config.customTextColor;
-    BYTE targetR = GetRValue(textColor);
-    BYTE targetG = GetGValue(textColor);
-    BYTE targetB = GetBValue(textColor);
+    if (isClearType) {
+        // Tag modified ClearType pixels with full alpha 255 (RamCpp3 style)
+        for (size_t i = 0; i < totalPixels; ++i) {
+            uint32_t rgb = pPixels[i] & 0x00FFFFFF;
+            if (rgb != 0) {
+                pPixels[i] = 0xFF000000 | rgb;
+            }
+        }
+    } else {
+        // Alpha thinning curve: eliminates DWM layered window edge swelling to match the clock
+        float gamma = m_config.textThinning;
+        if (gamma < 0.5f) gamma = 0.5f;
+        if (gamma > 3.0f) gamma = 3.0f;
 
-    // Alpha reconstruction with true premultiplied alpha (smooth, zero color-fringing)
-    for (size_t i = 0; i < totalPixels; ++i) {
-        BYTE a = static_cast<BYTE>(pPixels[i] & 0xFF);
-        if (a > 0) {
-            BYTE pr = static_cast<BYTE>((targetR * a + 127) / 255);
-            BYTE pg = static_cast<BYTE>((targetG * a + 127) / 255);
-            BYTE pb = static_cast<BYTE>((targetB * a + 127) / 255);
-            pPixels[i] = (static_cast<uint32_t>(a) << 24) |
-                         (static_cast<uint32_t>(pr) << 16) |
-                         (static_cast<uint32_t>(pg) << 8) |
-                         pb;
-        } else {
-            // Alpha = 1: 100% invisible to human eye, but ensures full window captures mouse clicks
-            pPixels[i] = 0x01000000;
+        BYTE lut[256];
+        for (int v = 0; v < 256; ++v) {
+            float norm = static_cast<float>(v) / 255.0f;
+            float thinned = powf(norm, gamma);
+            lut[v] = static_cast<BYTE>(roundf(thinned * 255.0f));
+        }
+
+        for (size_t i = 0; i < totalPixels; ++i) {
+            BYTE rawA = static_cast<BYTE>(pPixels[i] & 0xFF);
+            if (rawA > 0) {
+                BYTE a = lut[rawA];
+                if (a > 0) {
+                    BYTE pr = static_cast<BYTE>((targetR * a + 127) / 255);
+                    BYTE pg = static_cast<BYTE>((targetG * a + 127) / 255);
+                    BYTE pb = static_cast<BYTE>((targetB * a + 127) / 255);
+                    pPixels[i] = (static_cast<uint32_t>(a) << 24) |
+                                 (static_cast<uint32_t>(pr) << 16) |
+                                 (static_cast<uint32_t>(pg) << 8) |
+                                 pb;
+                } else {
+                    pPixels[i] = 0x01000000;
+                }
+            } else {
+                pPixels[i] = 0x01000000;
+            }
         }
     }
 

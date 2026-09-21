@@ -11,6 +11,9 @@ struct AppConfig {
     std::wstring fontFamily = L"Segoe UI";
     int fontSize = 9;                       // Points
     bool fontBold = false;
+    int fontWeight = FW_NORMAL;             // FW_NORMAL (400), FW_LIGHT (300), FW_SEMILIGHT (350), FW_BOLD (700)
+    float textThinning = 1.4f;              // Alpha power curve: 1.0 (standard), 1.4 (slender/clock-matched), 1.8 (ultra-thin)
+    std::wstring fontQuality = L"AntiAliased"; // "AntiAliased" (smooth grayscale) or "ClearType" (subpixel)
     UINT alignment = DT_CENTER;             // DT_CENTER, DT_LEFT, DT_RIGHT
 
     std::wstring horizontalTemplate = L"CPU: {cpu}%\nRAM: {ram_percent}%";

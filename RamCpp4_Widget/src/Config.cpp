@@ -219,6 +219,31 @@ bool LoadAppConfig(const std::wstring& configFilePath, AppConfig& config) {
             if (sz >= 6 && sz <= 36) config.fontSize = sz;
         } else if (_wcsicmp(key.c_str(), L"FontBold") == 0) {
             config.fontBold = (_wtoi(val.c_str()) != 0);
+            if (config.fontBold && config.fontWeight == FW_NORMAL) {
+                config.fontWeight = FW_BOLD;
+            }
+        } else if (_wcsicmp(key.c_str(), L"FontWeight") == 0) {
+            int fw = _wtoi(val.c_str());
+            if (fw >= 100 && fw <= 900) {
+                config.fontWeight = fw;
+            } else if (_wcsicmp(val.c_str(), L"Light") == 0) {
+                config.fontWeight = 300;
+            } else if (_wcsicmp(val.c_str(), L"SemiLight") == 0) {
+                config.fontWeight = 350;
+            } else if (_wcsicmp(val.c_str(), L"Normal") == 0 || _wcsicmp(val.c_str(), L"Regular") == 0) {
+                config.fontWeight = 400;
+            } else if (_wcsicmp(val.c_str(), L"Bold") == 0) {
+                config.fontWeight = 700;
+            }
+        } else if (_wcsicmp(key.c_str(), L"TextThinning") == 0) {
+            float th = static_cast<float>(_wtof(val.c_str()));
+            if (th >= 0.5f && th <= 3.0f) config.textThinning = th;
+        } else if (_wcsicmp(key.c_str(), L"FontQuality") == 0) {
+            if (_wcsicmp(val.c_str(), L"ClearType") == 0) {
+                config.fontQuality = L"ClearType";
+            } else {
+                config.fontQuality = L"AntiAliased";
+            }
         } else if (_wcsicmp(key.c_str(), L"Alignment") == 0) {
             if (_wcsicmp(val.c_str(), L"Left") == 0) config.alignment = DT_LEFT;
             else if (_wcsicmp(val.c_str(), L"Right") == 0) config.alignment = DT_RIGHT;

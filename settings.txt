@@ -11,10 +11,22 @@ UpdateInterval=2000
 # or specify a custom Hex RRGGBB (e.g. FFFFFF, 00E5FF, FFB300)
 TextColor=Auto
 
-# Font Settings (Uses native ClearType for crisp, smooth text matching native taskbar)
+# Font Settings:
+# FontFamily: Segoe UI, Segoe UI Variable Text, Consolas, etc.
 FontFamily=Segoe UI
 FontSize=9
 FontBold=0
+
+# FontWeight: Normal (400), SemiLight (350), Light (300), Bold (700), or numeric 100-900
+# Default: Normal (400)
+FontWeight=Normal
+
+# TextThinning: Controls stroke slenderness to match Windows taskbar clock
+# 1.0 = standard, 1.4 = slender (recommended for clock matching), 1.8 = ultra-thin
+TextThinning=1.4
+
+# FontQuality: AntiAliased (smooth grayscale, 0 color fringing) or ClearType (RamCpp3 subpixel)
+FontQuality=AntiAliased
 
 # Text Alignment: Center, Left, Right
 Alignment=Center
