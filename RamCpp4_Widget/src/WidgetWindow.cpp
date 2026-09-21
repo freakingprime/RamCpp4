@@ -467,9 +467,20 @@ LRESULT WidgetWindow::HandleMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
             WORD cmdId = LOWORD(wParam);
             if (cmdId == IDM_RELOAD) {
                 ReloadConfig();
-            } else if (cmdId == IDM_EDIT_SETTINGS) {
-                ShellExecuteW(NULL, L"open", L"notepad.exe", m_configPath.c_str(), NULL, SW_SHOW);
-            } else if (cmdId == IDM_EXIT) {
+            }
+            else if (cmdId == IDM_EDIT_SETTINGS) {
+                // Determine directory containing settings.txt
+                std::wstring configDir = m_configPath;
+                size_t lastSlash = configDir.find_last_of(L"\\/");
+                LPCWSTR lpDir = (lastSlash != std::wstring::npos) ? (configDir.substr(0, lastSlash).c_str()) : NULL;
+                // Launch with system default editor (e.g. Notepad++)
+                HINSTANCE hInst = ShellExecuteW(NULL, L"open", m_configPath.c_str(), NULL, lpDir, SW_SHOWNORMAL);
+                if ((INT_PTR)hInst <= 32) {
+                    // Fallback to notepad.exe if default association fails
+                    ShellExecuteW(NULL, L"open", L"notepad.exe", m_configPath.c_str(), lpDir, SW_SHOWNORMAL);
+                }
+            }
+            else if (cmdId == IDM_EXIT) {
                 UnloadAndExit();
             }
             return 0;
