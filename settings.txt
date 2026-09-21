@@ -3,29 +3,21 @@
 # In-Process Taskbar System Monitor
 # ==========================================================
 
-# Metrics refresh and UI update interval in milliseconds (default: 2000, minimum: 900)
-UpdateInterval=2000
+# Metrics refresh and UI update interval in milliseconds (default: 2000)
+UpdateInterval=1000
 
 # Text Color:
-# Set to 'Auto' to automatically match the Windows taskbar clock color (Light/Dark theme),
+# Set to 'Auto' to automatically match the Windows taskbar clock color,
 # or specify a custom Hex RRGGBB (e.g. FFFFFF, 00E5FF, FFB300)
 TextColor=Auto
 
 # Font Settings:
-# FontFamily: Segoe UI, Segoe UI Variable Text, Consolas, etc.
-FontFamily=Segoe UI
-FontSize=9
+# FontFamily: Consolas, Segoe UI, Segoe UI Variable Text, etc.
+FontFamily=Consolas
+FontSize=11
 FontBold=0
-
-# FontWeight: Normal (400), SemiLight (350), Light (300), Bold (700), or numeric 100-900
-# Default: Normal (400)
 FontWeight=Normal
-
-# TextThinning: Controls stroke slenderness to match Windows taskbar clock
-# 1.0 = standard, 1.4 = slender (recommended for clock matching), 1.8 = ultra-thin
 TextThinning=1.4
-
-# FontQuality: AntiAliased (smooth grayscale, 0 color fringing) or ClearType (RamCpp3 subpixel)
 FontQuality=AntiAliased
 
 # Text Alignment: Center, Left, Right
@@ -35,7 +27,7 @@ Alignment=Center
 # Auto = Sums traffic across all active physical network adapters (default)
 # Or specify Adapter Name / Description (e.g. "Ethernet", "Wi-Fi", "Realtek")
 # Or specify Local IP Address (e.g. "192.168.1.100")
-NetworkAdapter=Auto
+NetworkAdapter=Wi-Fi
 
 # Formatting Templates
 # Available tokens:
@@ -56,18 +48,18 @@ NetworkAdapter=Auto
 # (Aliases: {net_down_0}, {net_up_0}, {net_down_mb_0}, {net_up_mb_0})
 # Use \n for newline.
 # Literal Unicode symbols (↑, ↓, ▲, ▼) and escapes (\u2191, \u2193) are fully supported.
-#
-# Examples with Network:
-#   HorizontalTemplate=CPU: {cpu}%  ↓{net_down_mb_int}M\nRAM: {ram_percent}%  ↑{net_up_mb_int}M
-#
-HorizontalTemplate=CPU: {cpu}%\nRAM: {ram_percent}%
-VerticalTemplate=C:{cpu}%\nR:{ram_percent}%
+# Example with Network: CPU: {cpu}%  ↓{net_down_mb_int}M\nRAM: {ram_percent}%  ↑{net_up_mb_int}M
+# wide-headed Barb Arrow 🡠 🡢 🡡 🡣 🡤 🡥 🡦 🡧 • 🡨 🡪 🡩 🡫 🡬 🡭 🡮 🡯 • 🡰 🡲 🡱 🡳 🡴 🡵 🡶 🡷 • 🡸 🡺 🡹 🡻 🡼 🡽 🡾 🡿 • 🢀 🢂 🢁 🢃 🢄 🢅 🢆 🢇
+# black arrowhead ➤ • ⮜ ⮞ ⮝ ⮟ • black white arrowhead ➢ ➣ • ⮘ ⮚ ⮙ ⮛
+# diff size arrow head 🠀 🠂 🠁 🠃 • 🠄 🠆 🠅 🠇 • 🠈 🠊 🠉 🠋
+HorizontalTemplate=Free: {ram_free_gb} GB ({ram_free_percent}%) 🠉{net_up_int}\nCPU : {cpu}   %        🠋{net_down_int}
+VerticalTemplate=C:{cpu}%\nFree:\n{ram_free_gb} GB\n({ram_free_percent}%)\n🠉{net_up_int}\n🠋{net_down_int}
 
 # Dimensions & Spacing (in pixels)
-HorizontalWidth=90
-VerticalHeight=40
-PaddingX=4
-PaddingY=2
+HorizontalWidth=220
+VerticalHeight=120
+PaddingX=1
+PaddingY=1
 
 # Position Manual Offset (in pixels):
 # OffsetX: negative moves left, positive moves right
