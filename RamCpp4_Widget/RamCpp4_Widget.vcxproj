@@ -100,7 +100,8 @@
   </ItemGroup>
   <ItemDefinitionGroup>
     <PostBuildEvent>
-      <Command>if not exist "$(TargetDir)settings.txt" copy /Y "$(SolutionDir)settings.txt" "$(TargetDir)settings.txt"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

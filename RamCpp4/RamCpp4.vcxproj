@@ -83,11 +83,8 @@
       <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;shell32.lib;advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>if not exist "$(TargetDir)settings.txt" copy /Y "$(SolutionDir)settings.txt" "$(TargetDir)settings.txt"
-if not exist "$(SolutionDir)ReleaseFiles" mkdir "$(SolutionDir)ReleaseFiles"
-copy /Y "$(TargetDir)RamCpp4.exe" "$(SolutionDir)ReleaseFiles\RamCpp4.exe"
-copy /Y "$(TargetDir)RamCpp4_Widget.dll" "$(SolutionDir)ReleaseFiles\RamCpp4_Widget.dll"
-copy /Y "$(SolutionDir)settings.txt" "$(SolutionDir)ReleaseFiles\settings.txt"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -104,7 +101,8 @@ copy /Y "$(SolutionDir)settings.txt" "$(SolutionDir)ReleaseFiles\settings.txt"</
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <PostBuildEvent>
-      <Command>if not exist "$(TargetDir)settings.txt" copy /Y "$(SolutionDir)settings.txt" "$(TargetDir)settings.txt"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Target Name="CleanReleaseFiles" BeforeTargets="Clean" Condition="'$(Configuration)'=='Release'">
