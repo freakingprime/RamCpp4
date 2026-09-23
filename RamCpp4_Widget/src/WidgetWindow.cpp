@@ -7,11 +7,6 @@
 #define IDM_EDIT_SETTINGS 1002
 #define IDM_EXIT          1003
 
-#ifndef GUID_CONSOLE_DISPLAY_STATE
-static const GUID GUID_CONSOLE_DISPLAY_STATE =
-    { 0x6fe69556, 0x704a, 0x47a0, { 0x8f, 0x24, 0xc2, 0x8d, 0x93, 0x6f, 0x08, 0x0c } };
-#endif
-
 extern HINSTANCE g_hDllInstance;
 
 namespace {
@@ -43,34 +38,12 @@ void WidgetWindow::Destroy() {
         m_hStopEvent = nullptr;
     }
 
-    if (m_hPowerNotify) {
-        UnregisterPowerSettingNotification(m_hPowerNotify);
-        m_hPowerNotify = nullptr;
-    }
-
     m_taskbarManager.Uninitialize();
 
     if (m_hWnd && IsWindow(m_hWnd)) {
-        WTSUnRegisterSessionNotification(m_hWnd);
         DestroyWindow(m_hWnd);
         m_hWnd = nullptr;
     }
-
-    if (m_memDC) {
-        if (m_oldBmp) {
-            SelectObject(m_memDC, m_oldBmp);
-            m_oldBmp = nullptr;
-        }
-        DeleteDC(m_memDC);
-        m_memDC = nullptr;
-    }
-    if (m_hDIB) {
-        DeleteObject(m_hDIB);
-        m_hDIB = nullptr;
-        m_pDIBBits = nullptr;
-    }
-    m_dibWidth = 0;
-    m_dibHeight = 0;
 
     if (m_hFont) {
         DeleteObject(m_hFont);
@@ -133,9 +106,6 @@ bool WidgetWindow::Create(HINSTANCE hInstance, const std::wstring& configPath) {
     if (!m_hWnd) return false;
 
     m_taskbarManager.Initialize(this);
-    m_hPowerNotify = RegisterPowerSettingNotification(m_hWnd, &GUID_CONSOLE_DISPLAY_STATE, DEVICE_NOTIFY_WINDOW_HANDLE);
-    WTSRegisterSessionNotification(m_hWnd, NOTIFY_FOR_THIS_SESSION);
-    ComputeGammaLut();
     RecreateFont();
     RedrawLayered();
 
@@ -144,18 +114,6 @@ bool WidgetWindow::Create(HINSTANCE hInstance, const std::wstring& configPath) {
     m_hWorkerThread = CreateThread(NULL, 0, WorkerThreadThunk, this, 0, NULL);
 
     return true;
-}
-
-void WidgetWindow::ComputeGammaLut() {
-    float gamma = m_config.textThinning;
-    if (gamma < 0.5f) gamma = 0.5f;
-    if (gamma > 3.0f) gamma = 3.0f;
-
-    for (int v = 0; v < 256; ++v) {
-        float norm = static_cast<float>(v) / 255.0f;
-        float thinned = powf(norm, gamma);
-        m_gammaLut[v] = static_cast<BYTE>(roundf(thinned * 255.0f));
-    }
 }
 
 void WidgetWindow::RecreateFont() {
@@ -192,15 +150,12 @@ void WidgetWindow::RecreateFont() {
 }
 
 void WidgetWindow::ReloadConfig() {
-    m_taskbarManager.InvalidateCachedTextColor();
     LoadAppConfig(m_configPath, m_config);
     m_horizontalTemplate.Compile(m_config.horizontalTemplate);
     m_verticalTemplate.Compile(m_config.verticalTemplate);
     m_monitor.SetConfiguredAdapter(m_config.networkAdapter, true);
 
-    ComputeGammaLut();
     RecreateFont();
-    ZeroMemory(&m_lastWidgetRect, sizeof(m_lastWidgetRect));
     OnTaskbarReposition();
     OnMetricsUpdated();
 }
@@ -219,12 +174,6 @@ void WidgetWindow::OnTaskbarReposition() {
             return;
         }
 
-        // Deduplicate: avoid repositioning and redraw if rect hasn't changed
-        if (EqualRect(&rcWidget, &m_lastWidgetRect) && IsWindowVisible(m_hWnd)) {
-            return;
-        }
-        m_lastWidgetRect = rcWidget;
-
         SetWindowPos(
             m_hWnd, HWND_TOPMOST,
             rcWidget.left, rcWidget.top, w, h,
@@ -235,7 +184,6 @@ void WidgetWindow::OnTaskbarReposition() {
 }
 
 void WidgetWindow::OnThemeChanged() {
-    m_taskbarManager.InvalidateCachedTextColor();
     if (!m_hWnd || !IsWindow(m_hWnd)) return;
     RedrawLayered();
 }
@@ -246,7 +194,6 @@ void WidgetWindow::OnMetricsUpdated() {
 }
 
 DWORD WINAPI WidgetWindow::WorkerThreadThunk(LPVOID lpParam) {
-    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
     WidgetWindow* pThis = reinterpret_cast<WidgetWindow*>(lpParam);
     if (pThis) {
         __try {
@@ -259,14 +206,6 @@ DWORD WINAPI WidgetWindow::WorkerThreadThunk(LPVOID lpParam) {
 
 void WidgetWindow::WorkerLoop() {
     while (WaitForSingleObject(m_hStopEvent, 0) == WAIT_TIMEOUT) {
-        // Pause polling when display is off or session is locked
-        if (!m_isDisplayOn || m_isSessionLocked) {
-            if (WaitForSingleObject(m_hStopEvent, 1000) != WAIT_TIMEOUT) {
-                break;
-            }
-            continue;
-        }
-
         const auto& activeTpl = m_isHorizontal ? m_horizontalTemplate : m_verticalTemplate;
         uint32_t neededFlags = activeTpl.GetNeededMetricFlags();
 
@@ -298,7 +237,6 @@ void WidgetWindow::WorkerLoop() {
 
 void WidgetWindow::RedrawLayered() {
     if (!m_hWnd || !IsWindow(m_hWnd)) return;
-    if (!m_isDisplayOn || m_isSessionLocked) return;
 
     RECT rcClient;
     GetClientRect(m_hWnd, &rcClient);
@@ -306,47 +244,27 @@ void WidgetWindow::RedrawLayered() {
     int h = rcClient.bottom - rcClient.top;
     if (w <= 0 || h <= 0) return;
 
-    // Allocate or resize persistent 32-bit DIB section and memory DC only when dimensions change
-    if (w != m_dibWidth || h != m_dibHeight || !m_memDC || !m_hDIB) {
-        if (m_memDC && m_oldBmp) {
-            SelectObject(m_memDC, m_oldBmp);
-            m_oldBmp = nullptr;
-        }
-        if (m_hDIB) {
-            DeleteObject(m_hDIB);
-            m_hDIB = nullptr;
-            m_pDIBBits = nullptr;
-        }
-        if (!m_memDC) {
-            HDC hdcScreen = GetDC(NULL);
-            m_memDC = CreateCompatibleDC(hdcScreen);
-            ReleaseDC(NULL, hdcScreen);
-        }
+    HDC hdcScreen = GetDC(NULL);
+    HDC memDC = CreateCompatibleDC(hdcScreen);
 
-        BITMAPINFO bmi = { 0 };
-        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        bmi.bmiHeader.biWidth = w;
-        bmi.bmiHeader.biHeight = -h; // Top-down DIB
-        bmi.bmiHeader.biPlanes = 1;
-        bmi.bmiHeader.biBitCount = 32;
-        bmi.bmiHeader.biCompression = BI_RGB;
+    BITMAPINFO bmi = { 0 };
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = w;
+    bmi.bmiHeader.biHeight = -h; // Top-down DIB
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
 
-        HDC hdcScreen = GetDC(NULL);
-        m_hDIB = CreateDIBSection(hdcScreen, &bmi, DIB_RGB_COLORS, &m_pDIBBits, NULL, 0);
-        ReleaseDC(NULL, hdcScreen);
+    void* pBits = nullptr;
+    HBITMAP hBmp = CreateDIBSection(hdcScreen, &bmi, DIB_RGB_COLORS, &pBits, NULL, 0);
+    HGDIOBJ oldBmp = SelectObject(memDC, hBmp);
 
-        if (!m_hDIB || !m_pDIBBits) return;
-        m_oldBmp = SelectObject(m_memDC, m_hDIB);
-        m_dibWidth = w;
-        m_dibHeight = h;
-    }
-
-    uint32_t* pPixels = reinterpret_cast<uint32_t*>(m_pDIBBits);
+    uint32_t* pPixels = reinterpret_cast<uint32_t*>(pBits);
     const size_t totalPixels = (size_t)w * h;
 
     bool isClearType = (_wcsicmp(m_config.fontQuality.c_str(), L"ClearType") == 0);
 
-    // Resolve target text color (cached in TaskbarManager)
+    // Resolve target text color
     COLORREF textColor = m_config.isTextColorAuto
         ? m_taskbarManager.GetAutoTextColor()
         : m_config.customTextColor;
@@ -359,15 +277,15 @@ void WidgetWindow::RedrawLayered() {
         for (size_t i = 0; i < totalPixels; ++i) {
             pPixels[i] = 0x01000000;
         }
-        SetTextColor(m_memDC, textColor);
+        SetTextColor(memDC, textColor);
     } else {
         // AntiAliased mode: initialize to zero and draw in pure white for exact coverage extraction
         ZeroMemory(pPixels, totalPixels * sizeof(uint32_t));
-        SetTextColor(m_memDC, RGB(255, 255, 255));
+        SetTextColor(memDC, RGB(255, 255, 255));
     }
 
-    HGDIOBJ oldFont = SelectObject(m_memDC, m_hFont);
-    SetBkMode(m_memDC, TRANSPARENT);
+    HGDIOBJ oldFont = SelectObject(memDC, m_hFont);
+    SetBkMode(memDC, TRANSPARENT);
 
     RECT rcText = rcClient;
     rcText.left += m_config.paddingX;
@@ -383,7 +301,7 @@ void WidgetWindow::RedrawLayered() {
 
     // Vertical centering
     RECT rcCalc = rcText;
-    DrawTextW(m_memDC, textToDraw, -1, &rcCalc, m_config.alignment | DT_CALCRECT | DT_NOPREFIX);
+    DrawTextW(memDC, textToDraw, -1, &rcCalc, m_config.alignment | DT_CALCRECT | DT_NOPREFIX);
     int textH = rcCalc.bottom - rcCalc.top;
     int boxH = rcText.bottom - rcText.top;
     if (boxH > textH) {
@@ -391,7 +309,7 @@ void WidgetWindow::RedrawLayered() {
         rcText.bottom = rcText.top + textH;
     }
 
-    DrawTextW(m_memDC, textToDraw, -1, &rcText, m_config.alignment | DT_NOPREFIX);
+    DrawTextW(memDC, textToDraw, -1, &rcText, m_config.alignment | DT_NOPREFIX);
 
     if (isClearType) {
         // Tag modified ClearType pixels with full alpha 255 (RamCpp3 style)
@@ -402,11 +320,22 @@ void WidgetWindow::RedrawLayered() {
             }
         }
     } else {
-        // Alpha thinning curve: direct lookup from precomputed LUT
+        // Alpha thinning curve: eliminates DWM layered window edge swelling to match the clock
+        float gamma = m_config.textThinning;
+        if (gamma < 0.5f) gamma = 0.5f;
+        if (gamma > 3.0f) gamma = 3.0f;
+
+        BYTE lut[256];
+        for (int v = 0; v < 256; ++v) {
+            float norm = static_cast<float>(v) / 255.0f;
+            float thinned = powf(norm, gamma);
+            lut[v] = static_cast<BYTE>(roundf(thinned * 255.0f));
+        }
+
         for (size_t i = 0; i < totalPixels; ++i) {
             BYTE rawA = static_cast<BYTE>(pPixels[i] & 0xFF);
             if (rawA > 0) {
-                BYTE a = m_gammaLut[rawA];
+                BYTE a = lut[rawA];
                 if (a > 0) {
                     BYTE pr = static_cast<BYTE>((targetR * a + 127) / 255);
                     BYTE pg = static_cast<BYTE>((targetG * a + 127) / 255);
@@ -441,7 +370,6 @@ void WidgetWindow::RedrawLayered() {
         }
     }
 
-    HDC hdcScreen = GetDC(NULL);
     RECT rcWindow;
     GetWindowRect(m_hWnd, &rcWindow);
     POINT ptDst = { rcWindow.left, rcWindow.top };
@@ -449,9 +377,12 @@ void WidgetWindow::RedrawLayered() {
     SIZE size = { w, h };
     BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
 
-    UpdateLayeredWindow(m_hWnd, hdcScreen, &ptDst, &size, m_memDC, &ptSrc, 0, &blend, ULW_ALPHA);
+    UpdateLayeredWindow(m_hWnd, hdcScreen, &ptDst, &size, memDC, &ptSrc, 0, &blend, ULW_ALPHA);
 
-    SelectObject(m_memDC, oldFont);
+    SelectObject(memDC, oldFont);
+    SelectObject(memDC, oldBmp);
+    DeleteObject(hBmp);
+    DeleteDC(memDC);
     ReleaseDC(NULL, hdcScreen);
 }
 
@@ -519,30 +450,6 @@ LRESULT WidgetWindow::HandleMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 
         case WM_USER_THEME_CHANGED:
             OnThemeChanged();
-            return 0;
-
-        case WM_POWERBROADCAST:
-            if (wParam == PBT_POWERSETTINGCHANGE) {
-                POWERBROADCAST_SETTING* pSetting = reinterpret_cast<POWERBROADCAST_SETTING*>(lParam);
-                if (pSetting && IsEqualGUID(pSetting->PowerSetting, GUID_CONSOLE_DISPLAY_STATE)) {
-                    DWORD state = *reinterpret_cast<const DWORD*>(pSetting->Data);
-                    // 0 = Off, 1 = On, 2 = Dimmed
-                    bool wasOn = m_isDisplayOn;
-                    m_isDisplayOn = (state != 0);
-                    if (!wasOn && m_isDisplayOn) {
-                        OnMetricsUpdated();
-                    }
-                }
-            }
-            return TRUE;
-
-        case WM_WTSSESSION_CHANGE:
-            if (wParam == WTS_SESSION_LOCK) {
-                m_isSessionLocked = true;
-            } else if (wParam == WTS_SESSION_UNLOCK) {
-                m_isSessionLocked = false;
-                OnMetricsUpdated();
-            }
             return 0;
 
         // User preference: disable all left click
